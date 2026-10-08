@@ -202,8 +202,15 @@ function DashboardPage({ token }) {
 
         const response = await apiRequest(`/admin/users?${params.toString()}`, {}, token);
         let users = response.data || [];
+        let contentItems = [];
 
-        if (selectedMetric.countKey) {
+        if (selectedMetric.contentKey) {
+          const itemLists = await Promise.all(users.map(async (user) => {
+            const items = await apiRequest(`/admin/users/${user.id}/${selectedMetric.contentKey}`, {}, token);
+            return (items || []).map((item) => ({ ...item, owner: user }));
+          }));
+          contentItems = itemLists.flat();
+        } else if (selectedMetric.countKey) {
           users = await Promise.all(users.map(async (user) => {
             const detail = await apiRequest(`/admin/users/${user.id}`, {}, token);
             return { ...user, metricCount: detail.stats?.[selectedMetric.countKey] ?? 0 };
@@ -214,6 +221,7 @@ function DashboardPage({ token }) {
         if (!cancelled) {
           setDetails({
             users,
+            contentItems,
             pagination: response.pagination || { page: detailPage, totalPages: 1, total: users.length },
           });
         }
@@ -237,8 +245,8 @@ function DashboardPage({ token }) {
     { key: 'users', label: 'Total users', value: stats?.totalUsers || 0 },
     { key: 'artists', label: 'Artists', value: stats?.totalArtists || 0, role: 'artist' },
     { key: 'audiences', label: 'Audiences', value: stats?.totalAudiences || 0, role: 'audience' },
-    { key: 'videos', label: 'Videos', value: stats?.totalVideos || 0, countKey: 'videosCount' },
-    { key: 'auditions', label: 'Auditions', value: stats?.totalAuditions || 0, countKey: 'auditionsCount' },
+    { key: 'videos', label: 'Videos', value: stats?.totalVideos || 0, contentKey: 'videos' },
+    { key: 'auditions', label: 'Auditions', value: stats?.totalAuditions || 0, contentKey: 'auditions' },
     { key: 'applications', label: 'Applications', value: stats?.totalApplications || 0, countKey: 'applicationsCount' },
   ];
   const selectedCard = cards.find((card) => card.key === selectedMetric?.key);
@@ -269,8 +277,12 @@ function DashboardPage({ token }) {
         <section className="dashboard-details" aria-live="polite">
           <div className="details-heading">
             <div>
-              <h3>{selectedCard.countKey ? `${selectedCard.label} by user` : selectedCard.label}</h3>
-              <p>{selectedCard.countKey ? 'Contribution counts for each user.' : 'Accounts matching this metric.'}</p>
+              <h3>{selectedCard.contentKey ? selectedCard.label : selectedCard.countKey ? `${selectedCard.label} by user` : selectedCard.label}</h3>
+              <p>
+                {selectedCard.contentKey
+                  ? `Showing ${selectedCard.label.toLowerCase()} with their creator.`
+                  : selectedCard.countKey ? 'Contribution counts for each user.' : 'Accounts matching this metric.'}
+              </p>
             </div>
             {details?.pagination ? (
               <span>Page {details.pagination.page} of {details.pagination.totalPages || 1}</span>
@@ -282,27 +294,96 @@ function DashboardPage({ token }) {
 
           {!detailsLoading && !detailsError && details ? (
             <>
-              {details.users.length ? (
+              {selectedCard.contentKey ? (
+                details.contentItems.length ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Content ID</th>
+                          <th>Username</th>
+                          <th>Email</th>
+                          <th>Role</th>
+                          <th>Title</th>
+                          <th>Category</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {details.contentItems.map((item) => (
+                          <tr key={`${item.owner.id}-${item.id}`}>
+                            <td>{item.id}</td>
+                            <td>{item.owner.username || item.owner.fullName || '—'}</td>
+                            <td>{item.owner.email || '—'}</td>
+                            <td>{item.owner.role || '—'}</td>
+                            <td>{item.title || `Untitled ${selectedCard.label.toLowerCase().replace(/s$/, '')}`}</td>
+                            <td>{item.category || '—'}</td>
+                            <td>
+                              <Link className="edit-user-link" to={`/users/${item.owner.id}`}>Edit user</Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <p className="details-message">No {selectedCard.label.toLowerCase()} found for users on this page.</p>
+              ) : details.users.length ? (
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
-                        <th>{selectedCard.countKey ? 'User' : 'Name'}</th>
+                        <th>Username</th>
                         <th>Email</th>
                         <th>Role</th>
+                        <th>Mobile</th>
+                        <th>TRK</th>
+                        <th>City</th>
+                        <th>State</th>
+                        <th>Country</th>
+                        <th>Gender</th>
+                        <th>Occupation</th>
                         {selectedCard.countKey ? <th>{selectedCard.label}</th> : <th>Joined</th>}
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {details.users.map((user) => (
                         <tr key={user.id}>
-                          <td>{user.fullName || user.username || 'N/A'}</td>
-                          <td>{user.email}</td>
-                          <td>{user.role}</td>
+                          <td>{user.username || user.fullName || '—'}</td>
+                          <td>{user.email || '—'}</td>
+                          <td>{user.role || '—'}</td>
+                          <td>{user.mobile || '—'}</td>
+                          <td>{user.trkCode || '—'}</td>
+                          <td>{user.city || '—'}</td>
+                          <td>{user.state || '—'}</td>
+                          <td>{user.country || '—'}</td>
+                          <td>{user.gender || '—'}</td>
+                          <td>{user.occupation || '—'}</td>
                           <td>
                             {selectedCard.countKey
                               ? user.metricCount
                               : user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                          </td>
+                          <td>
+                            <UserRowActions
+                              user={user}
+                              token={token}
+                              onDeleted={async () => {
+                                setDetails((current) => current ? {
+                                  ...current,
+                                  users: current.users.filter((item) => item.id !== user.id),
+                                  pagination: {
+                                    ...current.pagination,
+                                    total: Math.max(0, (current.pagination.total || 0) - 1),
+                                  },
+                                } : current);
+                                try {
+                                  setStats(await apiRequest('/admin/dashboard', {}, token));
+                                } catch (err) {
+                                  setDetailsError(`User was deleted, but dashboard totals could not be refreshed: ${err.message}`);
+                                }
+                              }}
+                            />
                           </td>
                         </tr>
                       ))}
@@ -341,6 +422,29 @@ function DashboardPage({ token }) {
     </div>
   );
 }
+
+const EDITABLE_USER_FIELDS = [
+  { key: 'fullName', label: 'Full name' },
+  { key: 'username', label: 'Username' },
+  { key: 'email', label: 'Email', type: 'email' },
+  { key: 'role', label: 'Role', type: 'role' },
+  { key: 'mobile', label: 'Mobile' },
+  { key: 'trkCode', label: 'TRK code' },
+  { key: 'city', label: 'City' },
+  { key: 'state', label: 'State / region' },
+  { key: 'country', label: 'Country' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'dateOfBirth', label: 'Date of birth', type: 'date' },
+  { key: 'occupation', label: 'Occupation' },
+  { key: 'bio', label: 'Bio', type: 'textarea' },
+  { key: 'website', label: 'Website', type: 'url' },
+  { key: 'instagramHandle', label: 'Instagram' },
+  { key: 'facebookUrl', label: 'Facebook', type: 'url' },
+  { key: 'youtubeUrl', label: 'YouTube', type: 'url' },
+  { key: 'address', label: 'Address' },
+  { key: 'postalCode', label: 'Postal code' },
+  { key: 'languages', label: 'Languages' },
+];
 
 function UsersPage({ token }) {
   const [loading, setLoading] = useState(true);
@@ -397,21 +501,49 @@ function UsersPage({ token }) {
           <table>
             <thead>
               <tr>
-                <th>Name</th>
+                <th>Username</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Mobile</th>
                 <th>TRK</th>
+                <th>City</th>
+                <th>State</th>
+                <th>Country</th>
+                <th>Gender</th>
+                <th>Occupation</th>
+                <th>Email verified</th>
                 <th>Joined</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((user) => (
-                <tr key={user.id} onClick={() => window.location.href = `#/users/${user.id}`} style={{ cursor: 'pointer' }}>
-                  <td>{user.fullName || user.username || 'N/A'}</td>
-                  <td>{user.email}</td>
-                  <td>{user.role}</td>
+                <tr key={user.id}>
+                  <td>{user.username || user.fullName || '—'}</td>
+                  <td>{user.email || '—'}</td>
+                  <td>{user.role || '—'}</td>
+                  <td>{user.mobile || '—'}</td>
                   <td>{user.trkCode || '—'}</td>
-                  <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                  <td>{user.city || '—'}</td>
+                  <td>{user.state || '—'}</td>
+                  <td>{user.country || '—'}</td>
+                  <td>{user.gender || '—'}</td>
+                  <td>{user.occupation || '—'}</td>
+                  <td>{typeof user.emailVerified === 'boolean' ? (user.emailVerified ? 'Yes' : 'No') : '—'}</td>
+                  <td>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <UserRowActions
+                      user={user}
+                      token={token}
+                      onDeleted={() => {
+                        setUsers((current) => current.filter((item) => item.id !== user.id));
+                        setPagination((current) => ({
+                          ...current,
+                          total: Math.max(0, current.total - 1),
+                        }));
+                      }}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -433,6 +565,10 @@ function UserDetailPage({ token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editValues, setEditValues] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -450,6 +586,13 @@ function UserDetailPage({ token }) {
         ]);
 
         setData({ user, videos, auditions, applications, stories, followers, following, activity });
+        setEditValues(Object.fromEntries(
+          EDITABLE_USER_FIELDS
+            .filter(({ key }) => ['fullName', 'username', 'email', 'role', 'mobile', 'trkCode', 'city', 'state'].includes(key) || Object.hasOwn(user, key))
+            .map(({ key, type }) => [key, type === 'date' && user[key] ? String(user[key]).slice(0, 10) : String(user[key] ?? '')]),
+        ));
+        setSaveError('');
+        setSaveMessage('');
       } catch (err) {
         setError(err.message);
       } finally {
@@ -464,31 +607,122 @@ function UserDetailPage({ token }) {
   if (error) return <ErrorState message={error} />;
 
   const { user, videos, auditions, applications, stories, followers, following, activity } = data;
+  const editableFields = EDITABLE_USER_FIELDS.filter(({ key }) => Object.hasOwn(editValues, key));
+  const changedFields = editableFields.filter(({ key, type }) => {
+    const originalValue = type === 'date' && user[key] ? String(user[key]).slice(0, 10) : String(user[key] ?? '');
+    return editValues[key] !== originalValue;
+  });
+
+  async function saveProfile(e) {
+    e.preventDefault();
+    const changes = Object.fromEntries(
+      changedFields.map(({ key }) => [key, editValues[key]]),
+    );
+
+    if (!Object.keys(changes).length) return;
+
+    setSaving(true);
+    setSaveError('');
+    setSaveMessage('');
+    try {
+      const updatedUser = await apiRequest(`/admin/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(changes),
+      }, token);
+      setData((current) => ({ ...current, user: { ...current.user, ...updatedUser } }));
+      setEditValues((current) => Object.fromEntries(
+        editableFields.map(({ key, type }) => [
+          key,
+          type === 'date' && updatedUser[key]
+            ? String(updatedUser[key]).slice(0, 10)
+            : String(updatedUser[key] ?? current[key] ?? ''),
+        ]),
+      ));
+      setSaveMessage('Profile changes saved.');
+    } catch (err) {
+      setSaveError(err.message || 'Unable to save profile changes');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div>
       <PageHeader title={user?.fullName || 'User profile'} subtitle={user?.email} />
 
+      <form className="detail-card profile-editor" onSubmit={saveProfile}>
+        <div className="profile-editor-heading">
+          <div>
+            <h3>Profile details</h3>
+            <p>Update the fields you need, then save your changes.</p>
+          </div>
+          <button type="submit" disabled={!changedFields.length || saving}>
+            {saving ? 'Saving...' : `Save ${changedFields.length ? `${changedFields.length} changed` : 'changes'}`}
+          </button>
+        </div>
+        {saveError ? <ErrorState message={saveError} /> : null}
+        {saveMessage ? <p className="success-message" role="status">{saveMessage}</p> : null}
+        <div className="profile-fields">
+          {editableFields.map(({ key, label, type }) => (
+            <label className="editable-field" key={key}>
+              <span className="editable-field-label">{label}</span>
+              {type === 'role' ? (
+                <select
+                  aria-label={label}
+                  disabled={saving}
+                  value={editValues[key]}
+                  onChange={(event) => setEditValues((current) => ({ ...current, [key]: event.target.value }))}
+                >
+                  {[...new Set([editValues[key], 'artist', 'audience'].filter(Boolean))].map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              ) : type === 'textarea' ? (
+                <textarea
+                  aria-label={label}
+                  disabled={saving}
+                  value={editValues[key]}
+                  onChange={(event) => setEditValues((current) => ({ ...current, [key]: event.target.value }))}
+                  rows="3"
+                />
+              ) : (
+                <input
+                  aria-label={label}
+                  type={type || 'text'}
+                  disabled={saving}
+                  value={editValues[key]}
+                  onChange={(event) => setEditValues((current) => ({ ...current, [key]: event.target.value }))}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+      </form>
+
       <div className="detail-grid">
         <div className="detail-card">
-          <h3>Profile</h3>
+          <h3>Account information</h3>
           <ul>
-            <li><strong>Role:</strong> {user.role}</li>
+            <li><strong>User ID:</strong> {user.id || '—'}</li>
+            <li><strong>Role:</strong> {user.role || '—'}</li>
             <li><strong>Mobile:</strong> {user.mobile || '—'}</li>
-            <li><strong>TRK:</strong> {user.trkCode || '—'}</li>
-            <li><strong>Location:</strong> {user.city || '—'}, {user.state || ''}</li>
-            <li><strong>Joined:</strong> {new Date(user.createdAt).toLocaleDateString()}</li>
+            <li><strong>TRK code:</strong> {user.trkCode || '—'}</li>
+            <li><strong>Location:</strong> {[user.city, user.state, user.country].filter(Boolean).join(', ') || '—'}</li>
+            <li><strong>Joined:</strong> {user.createdAt ? new Date(user.createdAt).toLocaleString() : '—'}</li>
+            <li><strong>Last updated:</strong> {user.updatedAt ? new Date(user.updatedAt).toLocaleString() : '—'}</li>
+            <li><strong>Email verified:</strong> {typeof user.emailVerified === 'boolean' ? (user.emailVerified ? 'Yes' : 'No') : '—'}</li>
           </ul>
         </div>
 
         <div className="detail-card">
           <h3>Stats</h3>
           <ul>
-            <li><strong>Videos:</strong> {user.stats?.videosCount ?? 0}</li>
-            <li><strong>Auditions:</strong> {user.stats?.auditionsCount ?? 0}</li>
-            <li><strong>Applications:</strong> {user.stats?.applicationsCount ?? 0}</li>
-            <li><strong>Followers:</strong> {user.stats?.followersCount ?? 0}</li>
-            <li><strong>Following:</strong> {user.stats?.followingCount ?? 0}</li>
+            <li><strong>Videos:</strong> {user.stats?.videosCount ?? videos?.length ?? 0}</li>
+            <li><strong>Auditions:</strong> {user.stats?.auditionsCount ?? auditions?.length ?? 0}</li>
+            <li><strong>Applications:</strong> {user.stats?.applicationsCount ?? applications?.length ?? 0}</li>
+            <li><strong>Stories:</strong> {user.stats?.storiesCount ?? stories?.length ?? 0}</li>
+            <li><strong>Followers:</strong> {user.stats?.followersCount ?? followers?.length ?? 0}</li>
+            <li><strong>Following:</strong> {user.stats?.followingCount ?? following?.length ?? 0}</li>
           </ul>
         </div>
       </div>
@@ -496,7 +730,7 @@ function UserDetailPage({ token }) {
       <SectionList title="Videos" items={videos || []} renderItem={(item) => <li key={item.id}>{item.title || 'Untitled video'} — {item.category || 'Videos'}</li>} />
       <SectionList title="Auditions" items={auditions || []} renderItem={(item) => <li key={item.id}>{item.title || 'Untitled audition'} — {item.category || 'Casting'}</li>} />
       <SectionList title="Applications" items={applications || []} renderItem={(item) => <li key={item.id}>{item.auditionTitle || 'Application'} — {item.status}</li>} />
-      <SectionList title="Stories" items={stories || []} renderItem={(item) => <li key={item.id}>{item.title || 'Story'} — {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}</li>} />
+      <SectionList title="Stories" items={stories || []} renderItem={(item) => <li key={item.id}>Story {item.id} — {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—'}</li>} />
       <SectionList title="Followers" items={followers || []} renderItem={(item) => <li key={item.id}>{item.fullName}</li>} />
       <SectionList title="Following" items={following || []} renderItem={(item) => <li key={item.id}>{item.fullName}</li>} />
       <SectionList title="Recent activity" items={activity?.logs || []} renderItem={(item) => <li key={item.id}>{item.action} — {new Date(item.createdAt).toLocaleString()}</li>} />
@@ -550,6 +784,48 @@ function ActivityLogsPage({ token }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function UserRowActions({ user, token, onDeleted }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function deleteUser() {
+    const name = user.fullName || user.email || 'this user';
+    if (!window.confirm(`Delete ${name}? This cannot be undone.`)) return;
+
+    setDeleting(true);
+    setError('');
+    try {
+      await apiRequest(`/admin/users/${user.id}`, { method: 'DELETE' }, token);
+      await onDeleted();
+    } catch (err) {
+      setError(err.message || 'Unable to delete user.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="user-row-actions">
+      <Link className="edit-user-link" to={`/users/${user.id}`}>
+        Edit
+      </Link>
+      <button
+        type="button"
+        className="delete-user-button"
+        aria-label={`Delete ${user.fullName || user.email || 'user'}`}
+        title="Delete user"
+        disabled={deleting}
+        onClick={deleteUser}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3" />
+        </svg>
+      </button>
+      {error ? <span className="delete-user-error" role="alert">{error}</span> : null}
     </div>
   );
 }
