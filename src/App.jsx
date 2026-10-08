@@ -166,6 +166,11 @@ function DashboardPage({ token }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedMetric, setSelectedMetric] = useState(null);
+  const [detailPage, setDetailPage] = useState(1);
+  const [details, setDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -182,29 +187,151 @@ function DashboardPage({ token }) {
     if (token) load();
   }, [token]);
 
+  useEffect(() => {
+    if (!token || !selectedMetric) return undefined;
+
+    let cancelled = false;
+    const loadDetails = async () => {
+      setDetailsLoading(true);
+      setDetailsError('');
+      setDetails(null);
+
+      try {
+        const params = new URLSearchParams({ page: String(detailPage), limit: '20' });
+        if (selectedMetric.role) params.set('role', selectedMetric.role);
+
+        const response = await apiRequest(`/admin/users?${params.toString()}`, {}, token);
+        let users = response.data || [];
+
+        if (selectedMetric.countKey) {
+          users = await Promise.all(users.map(async (user) => {
+            const detail = await apiRequest(`/admin/users/${user.id}`, {}, token);
+            return { ...user, metricCount: detail.stats?.[selectedMetric.countKey] ?? 0 };
+          }));
+          users = users.filter((user) => user.metricCount > 0);
+        }
+
+        if (!cancelled) {
+          setDetails({
+            users,
+            pagination: response.pagination || { page: detailPage, totalPages: 1, total: users.length },
+          });
+        }
+      } catch (err) {
+        if (!cancelled) setDetailsError(err.message || 'Unable to load dashboard details');
+      } finally {
+        if (!cancelled) setDetailsLoading(false);
+      }
+    };
+
+    loadDetails();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, selectedMetric, detailPage]);
+
   if (loading) return <SectionCard title="Dashboard" subtitle="Loading stats..." />;
   if (error) return <ErrorState message={error} />;
 
   const cards = [
-    { label: 'Total users', value: stats?.totalUsers || 0 },
-    { label: 'Artists', value: stats?.totalArtists || 0 },
-    { label: 'Audiences', value: stats?.totalAudiences || 0 },
-    { label: 'Videos', value: stats?.totalVideos || 0 },
-    { label: 'Auditions', value: stats?.totalAuditions || 0 },
-    { label: 'Applications', value: stats?.totalApplications || 0 },
+    { key: 'users', label: 'Total users', value: stats?.totalUsers || 0 },
+    { key: 'artists', label: 'Artists', value: stats?.totalArtists || 0, role: 'artist' },
+    { key: 'audiences', label: 'Audiences', value: stats?.totalAudiences || 0, role: 'audience' },
+    { key: 'videos', label: 'Videos', value: stats?.totalVideos || 0, countKey: 'videosCount' },
+    { key: 'auditions', label: 'Auditions', value: stats?.totalAuditions || 0, countKey: 'auditionsCount' },
+    { key: 'applications', label: 'Applications', value: stats?.totalApplications || 0, countKey: 'applicationsCount' },
   ];
+  const selectedCard = cards.find((card) => card.key === selectedMetric?.key);
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Platform overview" />
       <div className="stats-grid">
         {cards.map((card) => (
-          <div key={card.label} className="stat-card">
+          <button
+            key={card.key}
+            type="button"
+            className={`stat-card${selectedMetric?.key === card.key ? ' is-selected' : ''}`}
+            aria-pressed={selectedMetric?.key === card.key}
+            onClick={() => {
+              setDetails(null);
+              setDetailPage(1);
+              setSelectedMetric((current) => current?.key === card.key ? null : card);
+            }}
+          >
             <span>{card.label}</span>
             <strong>{card.value}</strong>
-          </div>
+          </button>
         ))}
       </div>
+
+      {selectedCard ? (
+        <section className="dashboard-details" aria-live="polite">
+          <div className="details-heading">
+            <div>
+              <h3>{selectedCard.countKey ? `${selectedCard.label} by user` : selectedCard.label}</h3>
+              <p>{selectedCard.countKey ? 'Contribution counts for each user.' : 'Accounts matching this metric.'}</p>
+            </div>
+            {details?.pagination ? (
+              <span>Page {details.pagination.page} of {details.pagination.totalPages || 1}</span>
+            ) : null}
+          </div>
+
+          {detailsLoading ? <p className="details-message">Loading details...</p> : null}
+          {detailsError ? <ErrorState message={detailsError} /> : null}
+
+          {!detailsLoading && !detailsError && details ? (
+            <>
+              {details.users.length ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{selectedCard.countKey ? 'User' : 'Name'}</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        {selectedCard.countKey ? <th>{selectedCard.label}</th> : <th>Joined</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {details.users.map((user) => (
+                        <tr key={user.id}>
+                          <td>{user.fullName || user.username || 'N/A'}</td>
+                          <td>{user.email}</td>
+                          <td>{user.role}</td>
+                          <td>
+                            {selectedCard.countKey
+                              ? user.metricCount
+                              : user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="details-message">No matching details found on this page.</p>}
+
+              <div className="pager">
+                <button
+                  type="button"
+                  disabled={details.pagination.page <= 1}
+                  onClick={() => setDetailPage((page) => page - 1)}
+                >
+                  Prev
+                </button>
+                <span>{details.pagination.total} users</span>
+                <button
+                  type="button"
+                  disabled={details.pagination.page >= (details.pagination.totalPages || 1)}
+                  onClick={() => setDetailPage((page) => page + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="mini-grid">
         <SectionCard title="New users today" value={stats?.newUsersToday ?? 0} />

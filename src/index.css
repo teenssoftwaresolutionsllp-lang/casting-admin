@@ -236,8 +236,8 @@ button {
 .mini-grid,
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -251,18 +251,72 @@ button {
 }
 
 .stat-card {
+  min-height: 82px;
+  padding: 12px 14px;
+  color: #1e293b;
+  text-align: left;
+  cursor: pointer;
   background: linear-gradient(135deg, #eff6ff, #ffffff 78%);
   border-color: #dbeafe;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.stat-card:hover,
+.stat-card:focus-visible {
+  border-color: #93c5fd;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+
+.stat-card.is-selected {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
 }
 
 .stat-card span {
   color: #64748b;
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 3px;
+  font-size: 0.85rem;
 }
 
 .stat-card strong {
-  font-size: 2rem;
+  font-size: 1.55rem;
+}
+
+.dashboard-details {
+  margin-bottom: 20px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+}
+
+.details-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.details-heading h3,
+.details-heading p {
+  margin: 0;
+}
+
+.details-heading p,
+.details-heading > span,
+.details-message {
+  color: #64748b;
+}
+
+.details-heading > span {
+  white-space: nowrap;
+}
+
+.details-message {
+  margin: 0;
 }
 
 .toolbar {
