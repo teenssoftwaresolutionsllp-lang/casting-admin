@@ -166,6 +166,8 @@ function DashboardPage({ token }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showRegistration, setShowRegistration] = useState(false);
+  const [registrationMessage, setRegistrationMessage] = useState('');
   const [selectedMetric, setSelectedMetric] = useState(null);
   const [detailPage, setDetailPage] = useState(1);
   const [details, setDetails] = useState(null);
@@ -238,9 +240,6 @@ function DashboardPage({ token }) {
     };
   }, [token, selectedMetric, detailPage]);
 
-  if (loading) return <SectionCard title="Dashboard" subtitle="Loading stats..." />;
-  if (error) return <ErrorState message={error} />;
-
   const cards = [
     { key: 'users', label: 'Total users', value: stats?.totalUsers || 0 },
     { key: 'artists', label: 'Artists', value: stats?.totalArtists || 0, role: 'artist' },
@@ -253,27 +252,65 @@ function DashboardPage({ token }) {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Platform overview" />
-      <div className="stats-grid">
-        {cards.map((card) => (
+      <PageHeader
+        title="Dashboard"
+        subtitle="Platform overview"
+        action={(
           <button
-            key={card.key}
+            className="primary-button"
             type="button"
-            className={`stat-card${selectedMetric?.key === card.key ? ' is-selected' : ''}`}
-            aria-pressed={selectedMetric?.key === card.key}
             onClick={() => {
-              setDetails(null);
-              setDetailPage(1);
-              setSelectedMetric((current) => current?.key === card.key ? null : card);
+              setRegistrationMessage('');
+              setShowRegistration((current) => !current);
             }}
           >
-            <span>{card.label}</span>
-            <strong>{card.value}</strong>
+            {showRegistration ? 'Close registration' : 'Register a candidate'}
           </button>
-        ))}
-      </div>
+        )}
+      />
+      {registrationMessage ? <p className="success-message" role="status">{registrationMessage}</p> : null}
+      {showRegistration ? (
+        <RegisterCandidateForm
+          onCancel={() => setShowRegistration(false)}
+          onCreated={() => {
+            setShowRegistration(false);
+            setRegistrationMessage('Candidate registered successfully.');
+            setStats(null);
+            setLoading(true);
+            setError('');
+            apiRequest('/admin/dashboard', {}, token)
+              .then(setStats)
+              .catch((err) => setError(err.message || 'Unable to refresh dashboard'))
+              .finally(() => setLoading(false));
+          }}
+        />
+      ) : null}
 
-      {selectedCard ? (
+      {loading ? <SectionCard title="Dashboard" subtitle="Loading stats..." /> : null}
+      {error ? <ErrorState message={error} /> : null}
+
+      {!loading && !error ? (
+        <>
+          <div className="stats-grid">
+            {cards.map((card) => (
+              <button
+                key={card.key}
+                type="button"
+                className={`stat-card${selectedMetric?.key === card.key ? ' is-selected' : ''}`}
+                aria-pressed={selectedMetric?.key === card.key}
+                onClick={() => {
+                  setDetails(null);
+                  setDetailPage(1);
+                  setSelectedMetric((current) => current?.key === card.key ? null : card);
+                }}
+              >
+                <span>{card.label}</span>
+                <strong>{card.value}</strong>
+              </button>
+            ))}
+          </div>
+
+          {selectedCard ? (
         <section className="dashboard-details" aria-live="polite">
           <div className="details-heading">
             <div>
@@ -412,13 +449,15 @@ function DashboardPage({ token }) {
             </>
           ) : null}
         </section>
-      ) : null}
+          ) : null}
 
-      <div className="mini-grid">
-        <SectionCard title="New users today" value={stats?.newUsersToday ?? 0} />
-        <SectionCard title="New this week" value={stats?.newUsersThisWeek ?? 0} />
-        <SectionCard title="New this month" value={stats?.newUsersThisMonth ?? 0} />
-      </div>
+          <div className="mini-grid">
+            <SectionCard title="New users today" value={stats?.newUsersToday ?? 0} />
+            <SectionCard title="New this week" value={stats?.newUsersThisWeek ?? 0} />
+            <SectionCard title="New this month" value={stats?.newUsersThisMonth ?? 0} />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -445,6 +484,128 @@ const EDITABLE_USER_FIELDS = [
   { key: 'postalCode', label: 'Postal code' },
   { key: 'languages', label: 'Languages' },
 ];
+
+const REGISTRATION_FIELDS = [
+  { key: 'fullName', label: 'Full name', required: true },
+  { key: 'email', label: 'Email', type: 'email', required: true },
+  { key: 'password', label: 'Temporary password', type: 'password', required: true, minLength: 6 },
+  { key: 'role', label: 'Account type', type: 'role', required: true },
+  { key: 'username', label: 'Username', required: true },
+  { key: 'mobile', label: 'Phone number' },
+  { key: 'age', label: 'Age', type: 'number', required: true, min: 1, max: 120, step: 1 },
+  { key: 'gender', label: 'Gender', type: 'gender' },
+  { key: 'city', label: 'City' },
+  { key: 'category', label: 'Talent category' },
+];
+
+const EMPTY_REGISTRATION_FORM = Object.fromEntries(
+  REGISTRATION_FIELDS.map(({ key }) => [key, key === 'role' ? 'artist' : '']),
+);
+
+function RegisterCandidateForm({ onCancel, onCreated }) {
+  const [form, setForm] = useState(EMPTY_REGISTRATION_FORM);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const payload = Object.fromEntries(
+      REGISTRATION_FIELDS
+        .map(({ key, type }) => {
+          const value = form[key].trim();
+          if (!value) return null;
+          if (type === 'array') return [key, value.split(',').map((item) => item.trim()).filter(Boolean)];
+          if (type === 'number') return [key, Number(value)];
+          return [key, value];
+        })
+        .filter(Boolean),
+    );
+
+    try {
+      await apiRequest('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      onCreated();
+    } catch (err) {
+      setError(err.message || 'Unable to register candidate');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form className="detail-card candidate-registration" onSubmit={handleSubmit}>
+      <div className="profile-editor-heading">
+        <div>
+          <h3>Register a candidate</h3>
+          <p>Enter the candidate’s basic account and profile details.</p>
+        </div>
+        <div className="registration-actions">
+          <button className="secondary-button" type="button" onClick={onCancel} disabled={loading}>Cancel</button>
+          <button className="primary-button" type="submit" disabled={loading}>
+            {loading ? 'Registering...' : 'Register candidate'}
+          </button>
+        </div>
+      </div>
+
+      {error ? <ErrorState message={error} /> : null}
+      <div className="profile-fields">
+        {REGISTRATION_FIELDS.map(({ key, label, type, required, minLength, min, max, step }) => (
+          <label className="editable-field" key={key}>
+            <span className="editable-field-label">{label}{required ? ' *' : ''}</span>
+            {type === 'role' ? (
+              <select
+                required={required}
+                disabled={loading}
+                value={form[key]}
+                onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+              >
+                <option value="artist">Artist</option>
+                <option value="audience">Audience</option>
+              </select>
+            ) : type === 'gender' ? (
+              <select
+                disabled={loading}
+                value={form[key]}
+                onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+              >
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+            ) : type === 'textarea' ? (
+              <textarea
+                disabled={loading}
+                required={required}
+                value={form[key]}
+                onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+                rows="3"
+              />
+            ) : (
+              <input
+                type={type === 'array' ? 'text' : type || 'text'}
+                required={required}
+                minLength={minLength}
+                min={min}
+                max={max}
+                step={step}
+                disabled={loading}
+                value={form[key]}
+                onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+    </form>
+  );
+}
 
 function UsersPage({ token }) {
   const [loading, setLoading] = useState(true);
@@ -830,13 +991,14 @@ function UserRowActions({ user, token, onDeleted }) {
   );
 }
 
-function PageHeader({ title, subtitle }) {
+function PageHeader({ title, subtitle, action }) {
   return (
     <div className="page-header">
       <div>
         <h2>{title}</h2>
         {subtitle ? <small>{subtitle}</small> : null}
       </div>
+      {action}
     </div>
   );
 }

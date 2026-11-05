@@ -1,4 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://casting-be.vercel.app';
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://casting-be-1.onrender.com')
+  .trim()
+  .replace(/\/+$/, '');
 
 export async function apiRequest(path, options = {}, token) {
   const headers = {
@@ -7,7 +9,8 @@ export async function apiRequest(path, options = {}, token) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const endpoint = `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+  const response = await fetch(endpoint, {
     ...options,
     headers,
   });

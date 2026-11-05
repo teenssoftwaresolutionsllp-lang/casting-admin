@@ -25,6 +25,9 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
+Admins can register a candidate from the button in the **Dashboard** header.
+The form submits basic account and profile details to the same `/auth/register` endpoint used by candidate sign-up.
+
 ## Production
 
 Create an optimized production build:
