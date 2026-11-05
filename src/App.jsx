@@ -647,7 +647,12 @@ function UsersPage({ token }) {
           onChange={(e) => { setPage(1); setSearch(e.target.value); }}
           placeholder="Search by name, email, mobile, TRK code"
         />
-        <select value={role} onChange={(e) => { setPage(1); setRole(e.target.value); }}>
+        <select
+          className="role-filter"
+          aria-label="Filter users by role"
+          value={role}
+          onChange={(e) => { setPage(1); setRole(e.target.value); }}
+        >
           <option value="all">All roles</option>
           <option value="artist">Artist</option>
           <option value="audience">Audience</option>
