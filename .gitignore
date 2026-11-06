@@ -12,3 +12,4 @@ Thumbs.db
 coverage/
 .vercel
 .env*
+.env.local
