@@ -36,6 +36,8 @@ Create an optimized production build:
 npm run build
 ```
 
+The Vercel build is configured to serve the admin app under `/admin`.
+
 Preview the production build locally:
 
 ```sh

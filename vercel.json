@@ -1,11 +1,30 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/dashboard",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/users",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/users/:id",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/logs",
       "destination": "/index.html"
     }
   ]
 }
-
 
 
