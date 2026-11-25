@@ -26,7 +26,7 @@ npm run dev
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 Admins can register a candidate from the button in the **Dashboard** header.
-The form submits basic account and profile details to the same `/auth/register` endpoint used by candidate sign-up. A profile photo is optional and is sent as multipart data with the `photo` field when selected.
+The form submits basic account and profile details to the same `/auth/register` endpoint used by candidate sign-up. A profile photo is optional; when selected, it is uploaded to `/media/upload` as the `file` field and its returned S3 key or URL is included as `profilePhoto` in the JSON registration request.
 
 ## Production
 

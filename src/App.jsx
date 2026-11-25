@@ -531,21 +531,25 @@ function RegisterCandidateForm({ onCancel, onCreated }) {
     );
 
     try {
-      let body;
-
       if (photo) {
-        body = new FormData();
-        Object.entries(payload).forEach(([key, value]) => {
-          body.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+        const uploadBody = new FormData();
+        uploadBody.append('file', photo);
+        const uploadResult = await apiRequest('/media/upload', {
+          method: 'POST',
+          body: uploadBody,
         });
-        body.append('photo', photo);
-      } else {
-        body = JSON.stringify(payload);
+        const profilePhoto = uploadResult?.key || uploadResult?.url;
+
+        if (typeof profilePhoto !== 'string' || !profilePhoto) {
+          throw new Error('Photo upload succeeded but did not return an image key or URL.');
+        }
+
+        payload.profilePhoto = profilePhoto;
       }
 
       await apiRequest('/auth/register', {
         method: 'POST',
-        body,
+        body: JSON.stringify(payload),
       });
       onCreated();
     } catch (err) {
@@ -591,7 +595,7 @@ function RegisterCandidateForm({ onCancel, onCreated }) {
         <div className="registration-actions">
           <button className="secondary-button" type="button" onClick={onCancel} disabled={loading}>Cancel</button>
           <button className="primary-button" type="submit" disabled={loading}>
-            {loading ? 'Registering...' : 'Register candidate'}
+            {loading ? (photo ? 'Uploading photo and registering...' : 'Registering...') : 'Register candidate'}
           </button>
         </div>
       </div>
