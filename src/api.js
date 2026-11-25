@@ -3,10 +3,13 @@ export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://casting-be
   .replace(/\/+$/, '');
 
 export async function apiRequest(path, options = {}, token) {
+  const customHeaders = { ...(options.headers || {}) };
+  const isFormData = options.body instanceof FormData;
+
   const headers = {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
+    ...customHeaders,
   };
 
   const endpoint = `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;

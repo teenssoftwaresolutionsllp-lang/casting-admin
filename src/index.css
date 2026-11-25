@@ -368,6 +368,54 @@ button {
   margin-bottom: 20px;
 }
 
+.candidate-photo-upload {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.candidate-photo-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.candidate-photo-preview,
+.candidate-photo-placeholder {
+  width: 96px;
+  height: 96px;
+  border-radius: 12px;
+}
+
+.candidate-photo-preview {
+  object-fit: cover;
+  border: 1px solid #cbd5e1;
+}
+
+.candidate-photo-placeholder {
+  display: grid;
+  place-items: center;
+  border: 1px dashed #94a3b8;
+  color: #64748b;
+  font-size: 0.78rem;
+  background: #f8fafc;
+}
+
+.candidate-photo-controls input {
+  display: block;
+  max-width: 100%;
+}
+
+.candidate-photo-controls small {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-weight: 400;
+}
+
 .registration-actions {
   display: flex;
   flex-wrap: wrap;

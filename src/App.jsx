@@ -504,8 +504,14 @@ const EMPTY_REGISTRATION_FORM = Object.fromEntries(
 
 function RegisterCandidateForm({ onCancel, onCreated }) {
   const [form, setForm] = useState(EMPTY_REGISTRATION_FORM);
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -525,9 +531,21 @@ function RegisterCandidateForm({ onCancel, onCreated }) {
     );
 
     try {
+      let body;
+
+      if (photo) {
+        body = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          body.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+        });
+        body.append('photo', photo);
+      } else {
+        body = JSON.stringify(payload);
+      }
+
       await apiRequest('/auth/register', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body,
       });
       onCreated();
     } catch (err) {
@@ -535,6 +553,32 @@ function RegisterCandidateForm({ onCancel, onCreated }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handlePhotoChange(event) {
+    const file = event.target.files?.[0] || null;
+
+    if (!file) {
+      setPhoto(null);
+      setPhotoPreview('');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select a valid image file.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Photo must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+
+    setError('');
+    setPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
   }
 
   return (
@@ -553,6 +597,25 @@ function RegisterCandidateForm({ onCancel, onCreated }) {
       </div>
 
       {error ? <ErrorState message={error} /> : null}
+      <div className="candidate-photo-upload">
+        <span className="editable-field-label">Profile photo (optional)</span>
+        <div className="candidate-photo-controls">
+          {photoPreview ? (
+            <img className="candidate-photo-preview" src={photoPreview} alt="Candidate profile preview" />
+          ) : (
+            <div className="candidate-photo-placeholder" aria-hidden="true">No photo</div>
+          )}
+          <div>
+            <input
+              type="file"
+              accept="image/*"
+              disabled={loading}
+              onChange={handlePhotoChange}
+            />
+            <small>Accepted: image files up to 5 MB</small>
+          </div>
+        </div>
+      </div>
       <div className="profile-fields">
         {REGISTRATION_FIELDS.map(({ key, label, type, required, minLength, min, max, step }) => (
           <label className="editable-field" key={key}>
