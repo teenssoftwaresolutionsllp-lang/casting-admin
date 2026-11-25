@@ -487,7 +487,7 @@ const EDITABLE_USER_FIELDS = [
 
 const REGISTRATION_FIELDS = [
   { key: 'fullName', label: 'Full name', required: true },
-  { key: 'email', label: 'Email', type: 'email', required: true },
+  { key: 'email', label: 'Email', type: 'email'},
   { key: 'password', label: 'Temporary password', type: 'password', required: true, minLength: 6 },
   { key: 'role', label: 'Account type', type: 'role', required: true },
   { key: 'username', label: 'Username', required: true },
